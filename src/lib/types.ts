@@ -1,16 +1,29 @@
-// CSV row parsed from file
-export interface CSVLectureRow {
-  순번: number;
-  구분: '업무특강' | '교과특강';
-  선생님성함: string;
-  활동강사명: string;
-  이메일주소: string;
-  일자: string;       // "2026. 2. 23"
-  시간: string;       // "16:00-18:00"
-  연수대상: string;
-  연수주제: string;
-  강의제목: string;
+// ── Column Mapping ──────────────────────────────────────────────────────────
+
+export type MappableField =
+  | 'category' | 'topic' | 'speakerName' | 'speakerEmail'
+  | 'teacherName' | 'date' | 'time' | 'targetAudience' | 'lectureTheme';
+
+export type ColumnMapping = Record<MappableField, number | null>;
+
+export interface RawCSVData {
+  headers: string[];
+  rows: string[][];
 }
+
+export const FIELD_META: Record<MappableField, { label: string; required: boolean }> = {
+  topic:          { label: '강의 제목',  required: true },
+  date:           { label: '날짜',       required: true },
+  time:           { label: '시간',       required: true },
+  category:       { label: '구분',       required: false },
+  speakerName:    { label: '강사명',     required: false },
+  speakerEmail:   { label: '이메일',     required: false },
+  teacherName:    { label: '담당 교사',  required: false },
+  targetAudience: { label: '연수 대상',  required: false },
+  lectureTheme:   { label: '연수 주제',  required: false },
+};
+
+// ── Parsed Meeting ──────────────────────────────────────────────────────────
 
 // Parsed and validated meeting data
 export interface ParsedMeeting {
@@ -73,7 +86,7 @@ export interface MeetingResult {
   error?: string;
 }
 
-export type AppStep = 'upload' | 'preview' | 'settings' | 'creating' | 'results';
+export type AppStep = 'upload' | 'mapping' | 'preview' | 'settings' | 'creating' | 'results';
 
 export interface ZoomStatus {
   loggedIn: boolean;

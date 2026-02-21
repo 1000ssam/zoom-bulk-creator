@@ -1,17 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { parseCSVFile } from '@/lib/csv-parser';
+import { parseCSVRaw, parseCSVWithMapping } from '@/lib/csv-parser';
 import { detectConflicts } from '@/lib/conflict-detector';
 import {
   AppStep,
+  ColumnMapping,
   ConflictGroup,
   DEFAULT_MEETING_SETTINGS,
   MeetingResult,
   MeetingSettings,
   ParsedMeeting,
+  RawCSVData,
   ZoomStatus,
 } from '@/lib/types';
+import ColumnMapper from '@/components/ColumnMapper';
 import ConflictWarning from '@/components/ConflictWarning';
 import MeetingPreview from '@/components/MeetingPreview';
 import MeetingSettingsForm from '@/components/MeetingSettingsForm';
@@ -24,6 +27,8 @@ interface State {
   step: AppStep;
   zoomStatus: ZoomStatus;
   zoomLoading: boolean;
+  rawCSV: RawCSVData | null;
+  columnMapping: ColumnMapping | null;
   meetings: ParsedMeeting[];
   parseErrors: { row: number; message: string }[];
   conflicts: ConflictGroup[];
@@ -36,7 +41,8 @@ interface State {
 type Action =
   | { type: 'SET_ZOOM'; payload: ZoomStatus }
   | { type: 'SET_ZOOM_LOADING'; payload: boolean }
-  | { type: 'SET_PARSED'; payload: { meetings: ParsedMeeting[]; errors: { row: number; message: string }[]; conflicts: ConflictGroup[] } }
+  | { type: 'SET_RAW_CSV'; payload: RawCSVData }
+  | { type: 'SET_PARSED'; payload: { meetings: ParsedMeeting[]; errors: { row: number; message: string }[]; conflicts: ConflictGroup[]; mapping: ColumnMapping } }
   | { type: 'SET_SELECTED_MEETINGS'; payload: ParsedMeeting[] }
   | { type: 'SET_SETTINGS'; payload: MeetingSettings }
   | { type: 'SET_STEP'; payload: AppStep }
@@ -49,6 +55,8 @@ const initial: State = {
   step: 'upload',
   zoomStatus: { loggedIn: false },
   zoomLoading: true,
+  rawCSV: null,
+  columnMapping: null,
   meetings: [],
   parseErrors: [],
   conflicts: [],
@@ -64,12 +72,15 @@ function reducer(state: State, action: Action): State {
       return { ...state, zoomStatus: action.payload };
     case 'SET_ZOOM_LOADING':
       return { ...state, zoomLoading: action.payload };
+    case 'SET_RAW_CSV':
+      return { ...state, rawCSV: action.payload, step: 'mapping' };
     case 'SET_PARSED':
       return {
         ...state,
         meetings: action.payload.meetings,
         parseErrors: action.payload.errors,
         conflicts: action.payload.conflicts,
+        columnMapping: action.payload.mapping,
         step: 'preview',
       };
     case 'SET_SELECTED_MEETINGS':
@@ -95,13 +106,14 @@ function reducer(state: State, action: Action): State {
 
 const STEPS: { key: AppStep; label: string }[] = [
   { key: 'upload', label: '1. 업로드' },
-  { key: 'preview', label: '2. 미리보기' },
-  { key: 'settings', label: '3. 설정' },
-  { key: 'creating', label: '4. 생성 중' },
-  { key: 'results', label: '5. 결과' },
+  { key: 'mapping', label: '2. 매핑' },
+  { key: 'preview', label: '3. 미리보기' },
+  { key: 'settings', label: '4. 설정' },
+  { key: 'creating', label: '5. 생성 중' },
+  { key: 'results', label: '6. 결과' },
 ];
 
-const STEP_ORDER: AppStep[] = ['upload', 'preview', 'settings', 'creating', 'results'];
+const STEP_ORDER: AppStep[] = ['upload', 'mapping', 'preview', 'settings', 'creating', 'results'];
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -128,16 +140,22 @@ export default function Home() {
       return;
     }
     try {
-      const { meetings, errors } = await parseCSVFile(file);
-      const { meetings: withConflicts, conflicts } = detectConflicts(meetings);
-      dispatch({
-        type: 'SET_PARSED',
-        payload: { meetings: withConflicts, errors, conflicts },
-      });
+      const rawCSV = await parseCSVRaw(file);
+      dispatch({ type: 'SET_RAW_CSV', payload: rawCSV });
     } catch (e) {
       alert(`파일 파싱 오류: ${e instanceof Error ? e.message : '알 수 없는 오류'}`);
     }
   }, []);
+
+  const handleMappingConfirm = useCallback((mapping: ColumnMapping) => {
+    if (!state.rawCSV) return;
+    const { meetings, errors } = parseCSVWithMapping(state.rawCSV.rows, mapping);
+    const { meetings: withConflicts, conflicts } = detectConflicts(meetings);
+    dispatch({
+      type: 'SET_PARSED',
+      payload: { meetings: withConflicts, errors, conflicts, mapping },
+    });
+  }, [state.rawCSV]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -331,7 +349,16 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── Step 2: 미리보기 ── */}
+        {/* ── Step 2: 컬럼 매핑 ── */}
+        {state.step === 'mapping' && state.rawCSV && (
+          <ColumnMapper
+            rawData={state.rawCSV}
+            onConfirm={handleMappingConfirm}
+            onBack={() => dispatch({ type: 'RESET' })}
+          />
+        )}
+
+        {/* ── Step 3: 미리보기 ── */}
         {state.step === 'preview' && (
           <div>
             {state.parseErrors.length > 0 && (
