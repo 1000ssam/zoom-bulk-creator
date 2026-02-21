@@ -3,7 +3,22 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Zoom 회의 일괄 생성기",
-  description: "CSV 파일에서 Zoom 회의를 일괄 생성합니다",
+  description: "CSV 업로드 → Zoom 회의 일괄 생성 → 결과 CSV 다운로드",
+  icons: {
+    icon: "/favicon.svg",
+  },
+  openGraph: {
+    title: "Zoom 회의 일괄 생성기",
+    description: "CSV 업로드 → Zoom 회의 일괄 생성 → 결과 CSV 다운로드",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Zoom 회의 일괄 생성기",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({
