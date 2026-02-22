@@ -20,11 +20,15 @@ import MeetingPreview from '@/components/MeetingPreview';
 import MeetingSettingsForm from '@/components/MeetingSettingsForm';
 import ProgressTracker from '@/components/ProgressTracker';
 import ResultsTable from '@/components/ResultsTable';
+import TransformResult from '@/components/TransformResult';
+
+type AppMode = 'direct' | 'transform';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
 interface State {
   step: AppStep;
+  mode: AppMode;
   zoomStatus: ZoomStatus;
   zoomLoading: boolean;
   rawCSV: RawCSVData | null;
@@ -39,6 +43,7 @@ interface State {
 }
 
 type Action =
+  | { type: 'SET_MODE'; payload: AppMode }
   | { type: 'SET_ZOOM'; payload: ZoomStatus }
   | { type: 'SET_ZOOM_LOADING'; payload: boolean }
   | { type: 'SET_RAW_CSV'; payload: RawCSVData }
@@ -53,6 +58,7 @@ type Action =
 
 const initial: State = {
   step: 'upload',
+  mode: 'direct',
   zoomStatus: { loggedIn: false },
   zoomLoading: true,
   rawCSV: null,
@@ -68,6 +74,8 @@ const initial: State = {
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case 'SET_MODE':
+      return { ...state, mode: action.payload };
     case 'SET_ZOOM':
       return { ...state, zoomStatus: action.payload };
     case 'SET_ZOOM_LOADING':
@@ -96,7 +104,7 @@ function reducer(state: State, action: Action): State {
     case 'ABORT':
       return { ...state, isAborted: true };
     case 'RESET':
-      return { ...initial, zoomStatus: state.zoomStatus, zoomLoading: false };
+      return { ...initial, mode: state.mode, zoomStatus: state.zoomStatus, zoomLoading: false };
     default:
       return state;
   }
@@ -104,7 +112,7 @@ function reducer(state: State, action: Action): State {
 
 // ── Step indicator ─────────────────────────────────────────────────────────
 
-const STEPS: { key: AppStep; label: string }[] = [
+const STEPS_DIRECT: { key: AppStep; label: string }[] = [
   { key: 'upload', label: '1. 업로드' },
   { key: 'mapping', label: '2. 매핑' },
   { key: 'preview', label: '3. 미리보기' },
@@ -113,7 +121,14 @@ const STEPS: { key: AppStep; label: string }[] = [
   { key: 'results', label: '6. 결과' },
 ];
 
-const STEP_ORDER: AppStep[] = ['upload', 'mapping', 'preview', 'settings', 'creating', 'results'];
+const STEPS_TRANSFORM: { key: AppStep; label: string }[] = [
+  { key: 'upload', label: '1. 업로드' },
+  { key: 'mapping', label: '2. 매핑' },
+  { key: 'preview', label: '3. 변환 결과' },
+];
+
+const STEP_ORDER_DIRECT: AppStep[] = ['upload', 'mapping', 'preview', 'settings', 'creating', 'results'];
+const STEP_ORDER_TRANSFORM: AppStep[] = ['upload', 'mapping', 'preview'];
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -240,7 +255,9 @@ export default function Home() {
 
   // ── Render ─────────────────────────────────────────────────────────────
 
-  const stepIndex = STEP_ORDER.indexOf(state.step);
+  const steps = state.mode === 'transform' ? STEPS_TRANSFORM : STEPS_DIRECT;
+  const stepOrder = state.mode === 'transform' ? STEP_ORDER_TRANSFORM : STEP_ORDER_DIRECT;
+  const stepIndex = stepOrder.indexOf(state.step);
 
   return (
     <main className="min-h-screen bg-[#F8F7F5]">
@@ -287,7 +304,7 @@ export default function Home() {
       {state.step !== 'upload' && (
         <div className="bg-white border-b border-gray-200 px-6 py-3">
           <div className="max-w-5xl mx-auto flex gap-2 flex-wrap">
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <div key={s.key} className="flex items-center gap-2">
                 <span
                   className={`text-xs font-medium px-3 py-1 rounded-full ${
@@ -300,7 +317,7 @@ export default function Home() {
                 >
                   {s.label}
                 </span>
-                {i < STEPS.length - 1 && (
+                {i < steps.length - 1 && (
                   <span className="text-gray-300 text-xs">›</span>
                 )}
               </div>
@@ -313,7 +330,33 @@ export default function Home() {
         {/* ── Step 1: 업로드 ── */}
         {state.step === 'upload' && (
           <div className="max-w-2xl mx-auto">
-            {!state.zoomStatus.loggedIn && !state.zoomLoading && (
+            {/* 모드 선택 */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <button
+                onClick={() => dispatch({ type: 'SET_MODE', payload: 'direct' })}
+                className={`p-4 rounded-2xl border-2 text-left transition-colors ${
+                  state.mode === 'direct'
+                    ? 'border-[#D2886F] bg-[#FAF0EC]'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-lg mb-1">🚀 직접 생성</div>
+                <p className="text-xs text-gray-500">Zoom OAuth로 회의 직접 개설</p>
+              </button>
+              <button
+                onClick={() => dispatch({ type: 'SET_MODE', payload: 'transform' })}
+                className={`p-4 rounded-2xl border-2 text-left transition-colors ${
+                  state.mode === 'transform'
+                    ? 'border-[#D2886F] bg-[#FAF0EC]'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="text-lg mb-1">📋 CSV 변환</div>
+                <p className="text-xs text-gray-500">Zoom API 형식으로 변환 → Make 연동</p>
+              </button>
+            </div>
+
+            {state.mode === 'direct' && !state.zoomStatus.loggedIn && !state.zoomLoading && (
               <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-6 text-sm text-amber-800">
                 <strong>Zoom 로그인이 필요합니다.</strong> 우측 상단 버튼을 눌러 로그인해주세요.
               </div>
@@ -334,7 +377,11 @@ export default function Home() {
               <p className="text-lg font-medium text-gray-700 mb-2">
                 CSV 파일을 끌어오거나 클릭하여 업로드
               </p>
-              <p className="text-sm text-gray-500">교실백점 특강 리스트 CSV 파일</p>
+              <p className="text-sm text-gray-500">
+                {state.mode === 'transform'
+                  ? 'Zoom API 형식 CSV로 변환합니다'
+                  : '교실백점 특강 리스트 CSV 파일'}
+              </p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -358,8 +405,17 @@ export default function Home() {
           />
         )}
 
-        {/* ── Step 3: 미리보기 ── */}
-        {state.step === 'preview' && (
+        {/* ── Step 3: 미리보기 / 변환 결과 ── */}
+        {state.step === 'preview' && state.mode === 'transform' && (
+          <TransformResult
+            meetings={state.meetings}
+            errors={state.parseErrors}
+            onBack={() => dispatch({ type: 'SET_STEP', payload: 'mapping' })}
+            onReset={() => dispatch({ type: 'RESET' })}
+          />
+        )}
+
+        {state.step === 'preview' && state.mode === 'direct' && (
           <div>
             {state.parseErrors.length > 0 && (
               <div className="bg-red-50 border border-red-300 rounded-2xl p-4 mb-4">
@@ -377,7 +433,7 @@ export default function Home() {
             <MeetingPreview
               meetings={state.meetings}
               onNext={(selected) => dispatch({ type: 'SET_SELECTED_MEETINGS', payload: selected })}
-              onBack={() => dispatch({ type: 'SET_STEP', payload: 'upload' })}
+              onBack={() => dispatch({ type: 'SET_STEP', payload: 'mapping' })}
             />
           </div>
         )}
